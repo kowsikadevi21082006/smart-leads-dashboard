@@ -16,6 +16,11 @@ Smart Leads Dashboard is a web application that allows users to:
 
 ---
 
+## 🌐 Deployment
+
+Frontend: https://smart-leads-dashboard-pink-ten.vercel.app/
+Backend: https://smart-leads-dashboard-1-4rxk.onrender.com/
+
 ## 🛠 Tech Stack
 
 ### Frontend
