@@ -45,6 +45,13 @@ Backend: https://smart-leads-dashboard-1-4rxk.onrender.com/
 
 ---
 
+### env.example file
+
+PORT = 3000
+JWT_SECRET = secretkey123
+MONGO_URI = mongodb+srv://admin_kowsika:kowsika123@cluster0.fuvoo1r.mongodb.net/
+---
+
 ## 🔐 Features
 
 ### Authentication
@@ -197,12 +204,6 @@ docker-compose up --build
 
 ---
 
-## 🌐 Deployment
-
-Frontend: (Add your deployed frontend link)
-Backend: (Add your deployed backend link)
-
----
 
 ## 🧪 Testing
 
