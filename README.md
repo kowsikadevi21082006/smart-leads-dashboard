@@ -217,34 +217,8 @@ Tested Features:
 
 ---
 
-## 📄 .env.example
-
-```env
-PORT=
-MONGO_URI=
-JWT_SECRET=
-```
-
----
 
 ## 👤 Author
 
 **Kowsika Devi**
-
----
-
-## 📬 Submission
-
-**Subject:** MERN Internship Assignment Submission - Kowsika Devi
-**Email:** [ritik.yadav@servicehive.tech](mailto:ritik.yadav@servicehive.tech)
-
----
-
-## ⭐ Notes
-
-* Built with clean and scalable architecture
-* Proper TypeScript usage (no unnecessary `any`)
-* Follows real-world engineering practices
-* Focused on performance and user experience
-
 ---
