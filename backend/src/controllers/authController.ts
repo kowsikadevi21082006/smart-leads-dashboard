@@ -2,6 +2,29 @@ import { Request, Response } from "express";
 import User from "../models/User";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { UserRole } from "../types/auth";
+
+const generateToken = (id: string, role: UserRole) =>
+  jwt.sign({ id, role }, process.env.JWT_SECRET as string, { expiresIn: "1d" });
+
+const buildAuthResponse = (
+  user: {
+    _id: string | { toString(): string };
+    name: string;
+    email: string;
+    role: UserRole;
+  },
+  message: string
+) => ({
+  message,
+  token: generateToken(user._id.toString(), user.role),
+  user: {
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    role: user.role,
+  },
+});
 
 // Register
 export const registerUser = async (req: Request, res: Response) => {
@@ -37,15 +60,7 @@ export const registerUser = async (req: Request, res: Response) => {
       role,
     });
 
-    res.status(201).json({
-      message: "User registered successfully.",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    res.status(201).json(buildAuthResponse(user, "User registered successfully."));
   } catch (error) {
     res.status(500).json({ message: "Server error." });
   }
@@ -74,21 +89,7 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "1d" }
-    );
-
-    res.json({
-      message: "Login successful.",
-      token,
-      user: {
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    res.json(buildAuthResponse(user, "Login successful."));
   } catch (error) {
     res.status(500).json({ message: "Server error." });
   }

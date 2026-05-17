@@ -13,22 +13,16 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    setSuccessMessage("");
     setLoading(true);
 
     try {
       await register(name, email, password);
-      const message = "Registration successful. Redirecting to login...";
-      setSuccessMessage(message);
-      window.setTimeout(() => {
-        navigate("/login", { replace: true });
-      }, 1000);
+      navigate("/dashboard", { replace: true });
     } catch (submitError) {
       const message =
         submitError instanceof Error
@@ -84,8 +78,6 @@ const Register = () => {
         />
 
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
-        {successMessage ? <StatusMessage tone="success">{successMessage}</StatusMessage> : null}
-
         <Button type="submit" className="w-full" size="lg" loading={loading} disabled={loading}>
           {loading ? "Creating account..." : "Register"}
         </Button>

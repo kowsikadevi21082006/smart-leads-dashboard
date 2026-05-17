@@ -6,6 +6,7 @@ export type LeadSource = (typeof leadSources)[number];
 export type UserRole = "admin" | "sales";
 
 export interface User {
+  id: string;
   name: string;
   email: string;
   role: UserRole;
@@ -24,7 +25,7 @@ export interface Lead {
 export interface AuthResponse {
   message: string;
   token: string;
-  user?: Pick<User, "name" | "email" | "role">;
+  user: Pick<User, "id" | "name" | "email" | "role">;
 }
 
 export interface LoginCredentials {

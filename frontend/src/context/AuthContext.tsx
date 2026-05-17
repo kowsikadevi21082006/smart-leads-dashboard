@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { loginRequest, registerRequest } from "../api/auth";
 import { extractErrorMessage, storageKeys } from "../api/axios";
-import { LoginCredentials, RegisterPayload, User, UserRole } from "../types";
+import { AuthResponse, LoginCredentials, RegisterPayload, User, UserRole } from "../types";
 
 interface AuthContextValue {
   user: User | null;
@@ -16,6 +16,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 interface JwtPayload {
+  id?: string;
   role?: UserRole;
 }
 
@@ -41,6 +42,7 @@ const persistAuth = (user: User) => {
     JSON.stringify({
       token: user.token,
       user: {
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -49,13 +51,18 @@ const persistAuth = (user: User) => {
   );
 };
 
-const buildUser = (token: string, email: string, name = ""): User => {
+const buildUser = (
+  auth: Pick<AuthResponse, "token" | "user">,
+  fallback?: { email?: string; name?: string }
+): User => {
+  const { token, user } = auth;
   const payload = decodeToken(token);
 
   return {
-    name,
-    email,
-    role: payload?.role ?? "sales",
+    id: user.id || payload?.id || "",
+    name: user.name || fallback?.name || "",
+    email: user.email || fallback?.email || "",
+    role: user.role || payload?.role || "sales",
     token,
   };
 };
@@ -76,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const parsed = JSON.parse(raw) as {
         token?: string;
-        user?: Pick<User, "name" | "email" | "role">;
+        user?: Pick<User, "id" | "name" | "email" | "role">;
       };
 
       if (!parsed.token) {
@@ -85,11 +92,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      const payload = decodeToken(parsed.token);
+
       setToken(parsed.token);
       setUser({
+        id: parsed.user?.id ?? payload?.id ?? "",
         name: parsed.user?.name ?? "",
         email: parsed.user?.email ?? "",
-        role: parsed.user?.role ?? "sales",
+        role: parsed.user?.role ?? payload?.role ?? "sales",
         token: parsed.token,
       });
     } catch {
@@ -102,11 +112,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     try {
       const response = await loginRequest({ email, password } as LoginCredentials);
-      const nextUser = buildUser(
-        response.token,
-        response.user?.email ?? email,
-        response.user?.name ?? ""
-      );
+      const nextUser = buildUser(response, { email });
 
       setUser(nextUser);
       setToken(response.token);
@@ -118,7 +124,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (name: string, email: string, password: string) => {
     try {
-      await registerRequest({ name, email, password } as RegisterPayload);
+      const response = await registerRequest({ name, email, password } as RegisterPayload);
+      const nextUser = buildUser(response, { email, name });
+
+      setUser(nextUser);
+      setToken(response.token);
+      persistAuth(nextUser);
     } catch (error) {
       throw new Error(extractErrorMessage(error));
     }

@@ -1,9 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import Lead from "../models/Lead";
+import { AuthenticatedRequest, UserRole } from "../types/auth";
 
 type LeadStatus = "New" | "Contacted" | "Qualified" | "Lost";
 type LeadSource = "Website" | "Instagram" | "Referral";
 type LeadQuery = {
+  _id?: string;
+  createdBy?: string;
   status?: LeadStatus;
   source?: LeadSource;
   $or?: Array<
@@ -14,7 +17,24 @@ type LeadQuery = {
 
 const PAGE_SIZE = 10;
 
-const buildLeadQuery = (req: Request): LeadQuery => {
+const getRouteParam = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
+const applyRoleScope = (
+  query: LeadQuery,
+  user?: { id: string; role: UserRole }
+): LeadQuery => {
+  if (user?.role === "sales") {
+    return {
+      ...query,
+      createdBy: user.id,
+    };
+  }
+
+  return query;
+};
+
+const buildLeadQuery = (req: AuthenticatedRequest): LeadQuery => {
   const { status, source, search } = req.query;
   const query: LeadQuery = {};
 
@@ -39,7 +59,7 @@ const buildLeadQuery = (req: Request): LeadQuery => {
     ];
   }
 
-  return query;
+  return applyRoleScope(query, req.user);
 };
 
 const escapeCsvValue = (value: string) => `"${value.replace(/"/g, '""')}"`;
@@ -69,7 +89,7 @@ const formatLeadCsv = (
   return [headers.join(","), ...rows].join("\n");
 };
 
-export const createLead = async (req: Request, res: Response) => {
+export const createLead = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { name, email, status, source } = req.body as {
       name?: string;
@@ -82,11 +102,16 @@ export const createLead = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Name, email, and source are required." });
     }
 
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
     const lead = await Lead.create({
       name: name.trim(),
       email: email.trim().toLowerCase(),
       status,
       source,
+      createdBy: req.user.id,
     });
 
     res.status(201).json(lead);
@@ -95,7 +120,7 @@ export const createLead = async (req: Request, res: Response) => {
   }
 };
 
-export const getLeads = async (req: Request, res: Response) => {
+export const getLeads = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { sort } = req.query;
     const query = buildLeadQuery(req);
@@ -126,7 +151,7 @@ export const getLeads = async (req: Request, res: Response) => {
   }
 };
 
-export const exportLeads = async (req: Request, res: Response) => {
+export const exportLeads = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const query = buildLeadQuery(req);
     const leads = await Lead.find(query as Parameters<typeof Lead.find>[0])
@@ -143,9 +168,16 @@ export const exportLeads = async (req: Request, res: Response) => {
   }
 };
 
-export const getLeadById = async (req: Request, res: Response) => {
+export const getLeadById = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const lead = await Lead.findById(req.params.id);
+    const leadId = getRouteParam(req.params.id);
+
+    if (!leadId) {
+      return res.status(400).json({ message: "Lead id is required." });
+    }
+
+    const query = applyRoleScope({ _id: leadId }, req.user);
+    const lead = await Lead.findOne(query as Parameters<typeof Lead.findOne>[0]);
     if (!lead) return res.status(404).json({ message: "Lead not found." });
 
     res.json(lead);
@@ -154,7 +186,7 @@ export const getLeadById = async (req: Request, res: Response) => {
   }
 };
 
-export const updateLead = async (req: Request, res: Response) => {
+export const updateLead = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { name, email, status, source } = req.body as {
       name?: string;
@@ -167,8 +199,16 @@ export const updateLead = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Name, email, and source are required." });
     }
 
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
+    const leadId = getRouteParam(req.params.id);
+
+    if (!leadId) {
+      return res.status(400).json({ message: "Lead id is required." });
+    }
+
+    const query = applyRoleScope({ _id: leadId }, req.user);
+
+    const lead = await Lead.findOneAndUpdate(
+      query as Parameters<typeof Lead.findOneAndUpdate>[0],
       {
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -188,7 +228,7 @@ export const updateLead = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteLead = async (req: Request, res: Response) => {
+export const deleteLead = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const lead = await Lead.findByIdAndDelete(req.params.id);
     if (!lead) {

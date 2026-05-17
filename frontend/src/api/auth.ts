@@ -10,10 +10,7 @@ export const loginRequest = async (
 
 export const registerRequest = async (
   payload: RegisterPayload
-): Promise<{ message: string }> => {
-  const { data } = await axiosInstance.post<{ message: string }>(
-    "/auth/register",
-    payload
-  );
+): Promise<AuthResponse> => {
+  const { data } = await axiosInstance.post<AuthResponse>("/auth/register", payload);
   return data;
 };
