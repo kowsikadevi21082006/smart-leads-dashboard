@@ -6,44 +6,72 @@ import jwt from "jsonwebtoken";
 // Register
 export const registerUser = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role } = req.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: "admin" | "sales";
+    };
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
+    if (!name?.trim() || !email?.trim() || !password?.trim()) {
+      return res.status(400).json({ message: "Name, email, and password are required." });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (password.trim().length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters." });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const userExists = await User.findOne({ email: normalizedEmail });
+    if (userExists) {
+      return res.status(409).json({ message: "User already exists." });
+    }
+
+    const hashedPassword = await bcrypt.hash(password.trim(), 10);
 
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: normalizedEmail,
       password: hashedPassword,
       role,
     });
 
     res.status(201).json({
-      message: "User registered successfully",
-      user,
+      message: "User registered successfully.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error." });
   }
 };
 
 // Login
 export const loginUser = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body as {
+      email?: string;
+      password?: string;
+    };
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!email?.trim() || !password?.trim()) {
+      return res.status(400).json({ message: "Email and password are required." });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    const isMatch = await bcrypt.compare(password.trim(), user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: "Invalid credentials." });
     }
 
     const token = jwt.sign(
@@ -53,10 +81,15 @@ export const loginUser = async (req: Request, res: Response) => {
     );
 
     res.json({
-      message: "Login successful",
+      message: "Login successful.",
       token,
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error." });
   }
 };

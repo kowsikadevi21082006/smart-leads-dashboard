@@ -1,12 +1,32 @@
 import { Request, Response } from "express";
 import Lead from "../models/Lead";
 
+type LeadStatus = "New" | "Contacted" | "Qualified" | "Lost";
+type LeadSource = "Website" | "Instagram" | "Referral";
+
 export const createLead = async (req: Request, res: Response) => {
   try {
-    const lead = await Lead.create(req.body);
+    const { name, email, status, source } = req.body as {
+      name?: string;
+      email?: string;
+      status?: LeadStatus;
+      source?: LeadSource;
+    };
+
+    if (!name?.trim() || !email?.trim() || !source?.trim()) {
+      return res.status(400).json({ message: "Name, email, and source are required." });
+    }
+
+    const lead = await Lead.create({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      status,
+      source,
+    });
+
     res.status(201).json(lead);
   } catch (error) {
-    res.status(500).json({ message: "Error creating lead" });
+    res.status(500).json({ message: "Error creating lead." });
   }
 };
 
@@ -47,40 +67,64 @@ export const getLeads = async (req: Request, res: Response) => {
       totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching leads" });
+    res.status(500).json({ message: "Error fetching leads." });
   }
 };
 
 export const getLeadById = async (req: Request, res: Response) => {
   try {
     const lead = await Lead.findById(req.params.id);
-    if (!lead) return res.status(404).json({ message: "Not found" });
+    if (!lead) return res.status(404).json({ message: "Lead not found." });
 
     res.json(lead);
   } catch {
-    res.status(500).json({ message: "Error" });
+    res.status(500).json({ message: "Error fetching lead." });
   }
 };
 
 export const updateLead = async (req: Request, res: Response) => {
   try {
+    const { name, email, status, source } = req.body as {
+      name?: string;
+      email?: string;
+      status?: LeadStatus;
+      source?: LeadSource;
+    };
+
+    if (!name?.trim() || !email?.trim() || !source?.trim()) {
+      return res.status(400).json({ message: "Name, email, and source are required." });
+    }
+
     const lead = await Lead.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true }
+      {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        status,
+        source,
+      },
+      { new: true, runValidators: true }
     );
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found." });
+    }
 
     res.json(lead);
   } catch {
-    res.status(500).json({ message: "Error updating" });
+    res.status(500).json({ message: "Error updating lead." });
   }
 };
 
 export const deleteLead = async (req: Request, res: Response) => {
   try {
-    await Lead.findByIdAndDelete(req.params.id);
-    res.json({ message: "Deleted successfully" });
+    const lead = await Lead.findByIdAndDelete(req.params.id);
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found." });
+    }
+
+    res.json({ message: "Deleted successfully." });
   } catch {
-    res.status(500).json({ message: "Error deleting" });
+    res.status(500).json({ message: "Error deleting lead." });
   }
 };
