@@ -1,16 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-interface CustomRequest extends Request {
-  user?: any;
-}
+import { AuthenticatedRequest, JwtUser } from "../types/auth";
 
 export const protect = (
-  req: CustomRequest,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
-  let token;
+  let token: string | undefined;
 
   if (req.headers.authorization?.startsWith("Bearer")) {
     try {
@@ -19,10 +16,10 @@ export const protect = (
       const decoded = jwt.verify(
         token,
         process.env.JWT_SECRET as string
-      );
+      ) as JwtUser;
 
       req.user = decoded;
-      next();
+      return next();
     } catch (error) {
       return res.status(401).json({ message: "Not authorized" });
     }

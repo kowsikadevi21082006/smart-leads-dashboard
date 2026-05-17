@@ -3,6 +3,71 @@ import Lead from "../models/Lead";
 
 type LeadStatus = "New" | "Contacted" | "Qualified" | "Lost";
 type LeadSource = "Website" | "Instagram" | "Referral";
+type LeadQuery = {
+  status?: LeadStatus;
+  source?: LeadSource;
+  $or?: Array<
+    | { name: { $regex: string; $options: "i" } }
+    | { email: { $regex: string; $options: "i" } }
+  >;
+};
+
+const PAGE_SIZE = 10;
+
+const buildLeadQuery = (req: Request): LeadQuery => {
+  const { status, source, search } = req.query;
+  const query: LeadQuery = {};
+
+  if (
+    typeof status === "string" &&
+    ["New", "Contacted", "Qualified", "Lost"].includes(status)
+  ) {
+    query.status = status as LeadStatus;
+  }
+
+  if (
+    typeof source === "string" &&
+    ["Website", "Instagram", "Referral"].includes(source)
+  ) {
+    query.source = source as LeadSource;
+  }
+
+  if (typeof search === "string" && search.trim()) {
+    query.$or = [
+      { name: { $regex: search.trim(), $options: "i" } },
+      { email: { $regex: search.trim(), $options: "i" } },
+    ];
+  }
+
+  return query;
+};
+
+const escapeCsvValue = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+const formatLeadCsv = (
+  leads: Array<{
+    name: string;
+    email: string;
+    status: string;
+    source: string;
+    createdAt: Date;
+  }>
+) => {
+  const headers = ["Name", "Email", "Status", "Source", "Created At"];
+  const rows = leads.map((lead) =>
+    [
+      lead.name,
+      lead.email,
+      lead.status,
+      lead.source,
+      lead.createdAt.toISOString(),
+    ]
+      .map((value) => escapeCsvValue(value))
+      .join(",")
+  );
+
+  return [headers.join(","), ...rows].join("\n");
+};
 
 export const createLead = async (req: Request, res: Response) => {
   try {
@@ -32,42 +97,49 @@ export const createLead = async (req: Request, res: Response) => {
 
 export const getLeads = async (req: Request, res: Response) => {
   try {
-    const { status, source, search, sort } = req.query;
-
-    let query: any = {};
-
-    if (status) query.status = status;
-    if (source) query.source = source;
-
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-      ];
-    }
+    const { sort } = req.query;
+    const query = buildLeadQuery(req);
 
     const page = Number(req.query.page) || 1;
-    const limit = 10;
-    const skip = (page - 1) * limit;
+    const skip = (page - 1) * PAGE_SIZE;
 
-    let sortOption: any = { createdAt: -1 };
+    let sortOption: Record<string, 1 | -1> = { createdAt: -1 };
     if (sort === "oldest") sortOption = { createdAt: 1 };
 
-    const total = await Lead.countDocuments(query);
+    const total = await Lead.countDocuments(
+      query as Parameters<typeof Lead.countDocuments>[0]
+    );
 
-    const leads = await Lead.find(query)
+    const leads = await Lead.find(query as Parameters<typeof Lead.find>[0])
       .sort(sortOption)
       .skip(skip)
-      .limit(limit);
+      .limit(PAGE_SIZE);
 
     res.json({
       data: leads,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / PAGE_SIZE),
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching leads." });
+  }
+};
+
+export const exportLeads = async (req: Request, res: Response) => {
+  try {
+    const query = buildLeadQuery(req);
+    const leads = await Lead.find(query as Parameters<typeof Lead.find>[0])
+      .sort({ createdAt: -1 })
+      .lean();
+    const csv = formatLeadCsv(leads);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename=\"leads-${timestamp}.csv\"`);
+    res.status(200).send(csv);
+  } catch (error) {
+    res.status(500).json({ message: "Error exporting leads." });
   }
 };
 

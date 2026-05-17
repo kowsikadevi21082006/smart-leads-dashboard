@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createLeadRequest,
   deleteLeadRequest,
+  exportLeadsRequest,
   getLeadsRequest,
   updateLeadRequest,
 } from "../api/leads";
@@ -14,6 +15,8 @@ import Loader from "../components/Loader";
 import Navbar from "../components/Navbar";
 import Pagination from "../components/Pagination";
 import StatusMessage from "../components/StatusMessage";
+import { useAuth } from "../context/AuthContext";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { Lead, LeadFilters, LeadFormValues, LeadSource, LeadStatus } from "../types";
 
 const initialFilters: LeadFilters = {
@@ -40,14 +43,17 @@ const getTotalPages = (total: number, pageSize: number) =>
   Math.max(Math.ceil(total / Math.max(pageSize, 1)), 1);
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filters, setFilters] = useState<LeadFilters>(initialFilters);
   const [searchInput, setSearchInput] = useState("");
+  const debouncedSearchInput = useDebouncedValue(searchInput.trim(), 500);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -82,18 +88,18 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const nextSearch = searchInput.trim();
+    setFilters((current) => {
+      if (current.search === debouncedSearchInput) {
+        return current;
+      }
 
-      setFilters((current) => ({
+      return {
         ...current,
-        page: current.search === nextSearch ? current.page : 1,
-        search: nextSearch,
-      }));
-    }, 400);
-
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
+        page: 1,
+        search: debouncedSearchInput,
+      };
+    });
+  }, [debouncedSearchInput]);
 
   const fetchLeads = useCallback(async (activeFilters: LeadFilters, showLoader = true) => {
     const requestId = latestRequestRef.current + 1;
@@ -248,6 +254,33 @@ const Dashboard = () => {
     }
   };
 
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const { blob, fileName } = await exportLeadsRequest(filters);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      showSuccess("CSV export started.");
+    } catch (exportError) {
+      const message =
+        exportError instanceof Error ? exportError.message : "Failed to export leads.";
+      setError(message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleStatusChange = (status: "" | LeadStatus) => {
     setSuccessMessage("");
     setFilters((current) =>
@@ -272,6 +305,7 @@ const Dashboard = () => {
   const qualifiedLeads = leads.filter((lead) => lead.status === "Qualified").length;
   const contactedLeads = leads.filter((lead) => lead.status === "Contacted").length;
   const newLeads = leads.filter((lead) => lead.status === "New").length;
+  const canDeleteLeads = user?.role === "admin";
 
   return (
     <div className="app-shell">
@@ -304,6 +338,15 @@ const Dashboard = () => {
                       Updating leads...
                     </span>
                   ) : null}
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    onClick={handleExportCsv}
+                    disabled={isExporting || loading}
+                    loading={isExporting}
+                  >
+                    Export CSV
+                  </Button>
                   <Button size="md" onClick={handleOpenCreate} disabled={submitting}>
                     Add Lead
                   </Button>
@@ -385,9 +428,20 @@ const Dashboard = () => {
                   {totalRecords} total record{totalRecords === 1 ? "" : "s"} in your pipeline
                 </p>
               </div>
-              <Button size="sm" onClick={handleOpenCreate} disabled={submitting}>
-                Add Lead
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleExportCsv}
+                  disabled={isExporting || loading}
+                  loading={isExporting}
+                >
+                  Export CSV
+                </Button>
+                <Button size="sm" onClick={handleOpenCreate} disabled={submitting}>
+                  Add Lead
+                </Button>
+              </div>
             </div>
 
             {loading ? (
@@ -400,6 +454,7 @@ const Dashboard = () => {
                   onDelete={handleDeleteLead}
                   isBusy={submitting}
                   busyLeadId={pendingDeleteId}
+                  canDelete={canDeleteLeads}
                 />
                 <Pagination
                   currentPage={filters.page}

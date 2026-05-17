@@ -6,7 +6,7 @@ import {
   PaginatedLeadsResponse,
 } from "../types";
 
-const buildQueryParams = (filters: LeadFilters) => {
+export const buildQueryParams = (filters: LeadFilters) => {
   const params = new URLSearchParams();
 
   params.set("page", String(filters.page));
@@ -51,4 +51,21 @@ export const updateLeadRequest = async (
 
 export const deleteLeadRequest = async (id: string): Promise<void> => {
   await axiosInstance.delete(`/leads/${id}`);
+};
+
+export const exportLeadsRequest = async (
+  filters: LeadFilters
+): Promise<{ blob: Blob; fileName: string }> => {
+  const query = buildQueryParams(filters);
+  const response = await axiosInstance.get(`/leads/export?${query}`, {
+    responseType: "blob",
+  });
+
+  const disposition = response.headers["content-disposition"];
+  const matchedFileName = disposition?.match(/filename="?([^"]+)"?/i)?.[1];
+
+  return {
+    blob: response.data as Blob,
+    fileName: matchedFileName || "leads-export.csv",
+  };
 };

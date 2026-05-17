@@ -17,6 +17,7 @@ interface LeadTableProps {
   onDelete: (lead: Lead) => void;
   isBusy?: boolean;
   busyLeadId?: string | null;
+  canDelete?: boolean;
 }
 
 const LeadTable = ({
@@ -25,6 +26,7 @@ const LeadTable = ({
   onDelete,
   isBusy = false,
   busyLeadId = null,
+  canDelete = true,
 }: LeadTableProps) => {
   if (!leads.length) {
     return (
@@ -80,16 +82,18 @@ const LeadTable = ({
                 >
                   Edit
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="danger"
-                  onClick={() => onDelete(lead)}
-                  loading={busyLeadId === lead._id}
-                  disabled={isBusy && busyLeadId !== lead._id}
-                >
-                  Delete
-                </Button>
+                {canDelete ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="danger"
+                    onClick={() => onDelete(lead)}
+                    loading={busyLeadId === lead._id}
+                    disabled={isBusy && busyLeadId !== lead._id}
+                  >
+                    Delete
+                  </Button>
+                ) : null}
               </div>
             </TableCell>
           </TableRow>
